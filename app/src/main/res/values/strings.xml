@@ -9,4 +9,15 @@
     <string name="play_vs_computer">Play vs Computer</string>
     <string name="start">Start</string>
     <string name="your_turn">Your turn %s</string>
+    <string name="fill_names">Fill the player names to start the game</string>
+    <string name="difficulty">Difficulty</string>
+    <string name="difficulty_easy">Easy (random)</string>
+    <string name="difficulty_hard">Hard (minimax)</string>
+    <string name="computer_name">Computer</string>
+    <string name="play_again_title">Do you want to play again?</string>
+    <string name="same_names">Yes! Same names</string>
+    <string name="different_names">Yes! Different names</string>
+    <string name="quit">Quit!</string>
+    <string name="won_game">%s won the game!</string>
+    <string name="draw_game">The game was a draw!</string>
 </resources>
