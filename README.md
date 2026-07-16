@@ -48,6 +48,47 @@ Unit tests (pure board + AI logic, no device needed):
 ./gradlew test
 ```
 
+
+## Releases
+
+Tagged versions on `master` publish a production APK to [GitHub Releases](https://github.com/ChrisKar96/TicTacToe-Offline/releases).
+
+### Cut a release
+
+From an up-to-date `master` commit:
+
+```bash
+git checkout master
+git pull
+git tag -a v2.1.0 -m "TicTacToe Offline 2.1.0"
+git push origin v2.1.0
+```
+
+Tag format: `vX.Y` or `vX.Y.Z` (example: `v2.0`, `v2.1.0`).
+
+The **Release** workflow then:
+
+1. Checks the tag commit is on `master`
+2. Builds `assembleRelease` with matching `versionName` / `versionCode`
+3. Publishes a GitHub Release with asset **`TicTacToe-Offline-vX.Y.Z.apk`**
+
+### Optional release signing
+
+By default the release APK is signed with the Android **debug** keystore (installable sideload, fine for personal use).
+
+For a real keystore, add repository secrets:
+
+| Secret | Purpose |
+|--------|---------|
+| `RELEASE_STORE_BASE64` | Base64-encoded `.jks` / `.keystore` |
+| `RELEASE_STORE_PASSWORD` | Keystore password |
+| `RELEASE_KEY_ALIAS` | Key alias |
+| `RELEASE_KEY_PASSWORD` | Key password |
+
+```bash
+base64 -w0 my-release.keystore   # paste into RELEASE_STORE_BASE64
+```
+
 ## CI
 
 GitHub Actions builds the debug APK, runs unit tests, checks package/activity via `aapt`, and uploads `app-debug` as a workflow artifact on every push and pull request.
