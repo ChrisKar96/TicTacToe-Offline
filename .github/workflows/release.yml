@@ -1,17 +1,16 @@
 name: Release
 
-# Push a version tag (vX.Y or vX.Y.Z) on a commit that is on master.
-# Builds a release APK and publishes it to GitHub Releases.
+# Push tag vX.Y or vX.Y.Z pointing at a master commit → production APK on GitHub Releases.
 on:
   push:
     tags:
-      - 'v*'
+      - 'v[0-9]*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to build (e.g. v2.0.0). Leave empty to use the current ref when run from a tag.'
-        required: false
-        default: ''
+        description: 'Tag to release (e.g. v2.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -21,19 +20,19 @@ jobs:
     name: Build release APK + publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Resolve version from tag
         id: ver
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ inputs.tag }}"
-            git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}" || true
-            git checkout "tags/${TAG}"
           else
             TAG="${GITHUB_REF_NAME}"
           fi
@@ -51,23 +50,24 @@ jobs:
             exit 1
           fi
 
-          # Ensure this commit is on master (production tags only).
+          # Production tags must land on master history.
           git fetch origin master
           if ! git merge-base --is-ancestor HEAD origin/master; then
-            echo "Refusing to release: tag commit is not an ancestor of origin/master"
+            echo "Refusing to release: tag commit is not on origin/master"
             exit 1
           fi
 
           # versionCode: 2.1.3 -> 20103 ; 2.0 -> 20000
           IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}.0.0"
           VERSION_CODE=$((10#$MAJOR * 10000 + 10#$MINOR * 100 + 10#${PATCH:-0}))
-
           APK_NAME="TicTacToe-Offline-v${VERSION}.apk"
 
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
-          echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "version_code=$VERSION_CODE"
+            echo "apk_name=$APK_NAME"
+          } >> "$GITHUB_OUTPUT"
           echo "Resolved tag=$TAG version=$VERSION code=$VERSION_CODE apk=$APK_NAME"
 
       - name: Set up JDK 17
@@ -85,14 +85,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Optional release keystore
-        if: ${{ secrets.RELEASE_STORE_BASE64 != '' }}
+      - name: Optional release keystore from secrets
         env:
-          RELEASE_STORE_BASE64: ${{ secrets.RELEASE_STORE_BASE64 }}
+          STORE_B64: ${{ secrets.RELEASE_STORE_BASE64 }}
         run: |
           set -euo pipefail
-          echo "$RELEASE_STORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-          echo "RELEASE_STORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          if [ -n "${STORE_B64:-}" ]; then
+            echo "$STORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "RELEASE_STORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "Using custom release keystore"
+          else
+            echo "No RELEASE_STORE_BASE64 secret; release APK will be debug-signed (sideload OK)"
+          fi
 
       - name: Assemble release APK
         env:
@@ -119,7 +123,7 @@ jobs:
           grep -q "versionName='${{ steps.ver.outputs.version }}'" /tmp/badging.txt
           grep -q "launchable-activity: name='gr.ckaramolegkos.tictactoe.MainActivity'" /tmp/badging.txt
           echo "path=$DEST" >> "$GITHUB_OUTPUT"
-          echo "APK ready: $DEST"
+          echo "APK ready: $DEST ($(wc -c < "$DEST") bytes)"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -130,7 +134,7 @@ jobs:
           files: ${{ steps.apk.outputs.path }}
           fail_on_unmatched_files: true
           body: |
-            Production release build of **TicTacToe Offline**.
+            Production release of **TicTacToe Offline**.
 
             | | |
             |---|---|
@@ -139,4 +143,4 @@ jobs:
             | Application ID | `gr.ckaramolegkos.tictactoe` |
             | APK | `${{ steps.ver.outputs.apk_name }}` |
 
-            Install by downloading the APK (sideload; enable install from unknown sources if needed).
+            Download the APK asset to install (sideload).
